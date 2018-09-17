@@ -3,7 +3,7 @@
 	"type": "phpbb-extension",
 	"description": "Compatibility layer for BBCodes used in posts imported from Zeta Boards.",
 	"homepage": "https://github.com/s9e/phpbb-ext-zeta-bbcodes/",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"keywords": ["phpbb"],
 	"license": "MIT",
 	"require": {
