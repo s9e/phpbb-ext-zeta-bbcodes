@@ -1,5 +1,8 @@
 services:
   s9e.zetabbcodes.listener:
     class: s9e\zetabbcodes\listener
+    arguments:
+      - '@auth'
+      - '@user'
     tags:
       - { name: event.listener }

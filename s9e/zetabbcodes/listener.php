@@ -8,37 +8,100 @@
 namespace s9e\zetabbcodes;
 
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use phpbb\auth\auth;
+use phpbb\user;
+use s9e\TextFormatter\Configurator\Items\Tag as TagConfig;
 use s9e\TextFormatter\Parser;
 use s9e\TextFormatter\Parser\Tag;
 
 class listener implements EventSubscriberInterface
 {
+	protected $auth;
 	protected static $colPos = -1;
+	protected $user;
+
+	public function __construct(auth $auth, user $user)
+	{
+		$this->auth = $auth;
+		$this->user = $user;
+	}
 
 	public static function getSubscribedEvents()
 	{
-		return ['core.text_formatter_s9e_configure_after' => 'onConfigure'];
+		return [
+			'core.text_formatter_s9e_configure_after' => 'onConfigure',
+			'core.text_formatter_s9e_renderer_setup'  => 'onRendererSetup'
+		];
 	}
 
 	public function onConfigure($event)
 	{
 		$configurator = $event['configurator'];
-		$configurator->tags['C']->filterChain->add(__CLASS__ . '::processCell')
-			->resetParameters()
-			->addParameterByName('tag')
-			->addParameterByName('parser')
-			->addParameterByName('openTags');
-		$configurator->tags['TR']->filterChain->add(__CLASS__ . '::processRow')
-			->resetParameters()
-			->addParameterByName('tag')
-			->addParameterByName('parser')
-			->addParameterByName('openTags');
+		foreach ($configurator->tags as $tagName => $tag)
+		{
+			$methodName = 'onConfigure' . ucfirst(strtolower($tagName));
+			if (method_exists($this, $methodName))
+			{
+				$this->$methodName($tag);
+			}
+		}
 
+		// Make [html] an alias for [code=html]
+		if (isset($configurator->tags['CODE']))
+		{
+			$configurator->BBCodes->add('HTML')->tagName = 'CODE';
+		}
+	}
+
+	protected function onConfigureC(TagConfig $tag)
+	{
+		$tag->filterChain->append(__CLASS__ . '::processCell')
+			->resetParameters()
+			->addParameterByName('tag')
+			->addParameterByName('parser')
+			->addParameterByName('openTags');
+	}
+
+	protected function onConfigureCode(TagConfig $tag)
+	{
+		$tag->filterChain->prepend(__CLASS__ . '::processCode')
+			->resetParameters()
+			->addParameterByName('tag')
+			->addParameterByName('text');
+	}
+
+	protected function onConfigureImg(TagConfig $tag)
+	{
+		// Add support for [img=width,height]
+		$tag->attributePreprocessors->add('img', '/^(?<width>\\d+),(?<height>\\d+)$/');
+		$this->addImgDimension($tag, 'height');
+		$this->addImgDimension($tag, 'width');
+	}
+
+	protected function onConfigureQuote(TagConfig $tag)
+	{
 		// Interpret [quote=foo,(time=123)] as [quote author=foo time=123]
-		$configurator->tags['quote']->attributePreprocessors->add(
+		$tag->attributePreprocessors->add(
 			'author',
 			'/^(?<author>.+),\\(time=(?<time>\\d+)\\)$/'
 		);
+	}
+
+	protected function onConfigureTr(TagConfig $tag)
+	{
+		$tag->filterChain->append(__CLASS__ . '::processRow')
+			->resetParameters()
+			->addParameterByName('tag')
+			->addParameterByName('parser')
+			->addParameterByName('openTags');
+	}
+
+	public function onRendererSetup($event)
+	{
+		$event['renderer']->get_renderer()->setParameters([
+			'USERNAME'   => $this->user->data['username'],
+			'S_IS_STAFF' => $this->auth->acl_gets('a_', 'm_')
+		]);
 	}
 
 	public static function processCell(Tag $tag, Parser $parser, array $openTags)
@@ -98,6 +161,16 @@ class listener implements EventSubscriberInterface
 		return false;
 	}
 
+	public static function processCode(Tag $tag, $text)
+	{
+		if (strtolower(substr($text, $tag->getPos(), $tag->getLen())) === '[html]')
+		{
+			$tag->setAttribute('lang', 'html');
+		}
+
+		return true;
+	}
+
 	public static function processRow(Tag $tag, Parser $parser, array $openTags)
 	{
 		self::$colPos = -1;
@@ -116,5 +189,24 @@ class listener implements EventSubscriberInterface
 		}
 
 		return true;
+	}
+
+	protected function addImgDimension(TagConfig $img, $attrName)
+	{
+		$attribute = $img->attributes->add($attrName);
+		$attribute->filterChain->append('#uint');
+		$attribute->required = false;
+		if (strpos($img->template, '<xsl:copy-of select="@' . $attrName . '"/>') !== false)
+		{
+			return;
+		}
+
+		$dom = $img->template->asDOM();
+		foreach ($dom->getElementsByTagName('img') as $node)
+		{
+			$node->appendChild($dom->createElementNS('http://www.w3.org/1999/XSL/Transform', 'xsl:copy-of'))
+			     ->setAttribute('select', '@' . $attrName);
+		}
+		$dom->saveChanges();
 	}
 }

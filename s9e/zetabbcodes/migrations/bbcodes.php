@@ -7,7 +7,7 @@
 */
 namespace s9e\zetabbcodes\migrations;
 
-class v000200 extends \phpbb\db\migration\migration
+class bbcodes extends \phpbb\db\migration\migration
 {
 	protected $bbcodes = [
 		[
@@ -73,8 +73,23 @@ class v000200 extends \phpbb\db\migration\migration
 			'<span style="background-color:{COLOR}">{TEXT}</span>'
 		],
 		[
-			'[border={COLOR},{UINT},{ALNUM} color={COLOR} width={UINT} style={ALNUM}]{TEXT}[/border]',
-			'<span style="border:{@style} {@width}px {@color}">{TEXT}</span>'
+			'[me]',
+			'<xsl:value-of select="$USERNAME"/>'
+		],
+		[
+			'[member]{TEXT}[/member]',
+			'<xsl:choose>
+				<xsl:when test="$S_USER_LOGGED_IN">{TEXT}</xsl:if>
+				<xsl:otherwise>[Hidden Content: Login/Register to View]</xsl:otherwise>
+			</xsl:choose>'
+		],
+		[
+			'[staff]{TEXT}[/staff]',
+			'<xsl:if test="$S_IS_STAFF">{TEXT}</xsl:if>'
+		],
+		[
+			'[border={PARSE=/^(?<color>#?\\w+)(?:,(?<width>\\d+)(?:,(?<style>\\w+))?)?/} color={COLOR} width={UINT;defaultValue=1} style={IDENTIFIER;defaultValue=solid}]{TEXT}[/border]',
+			'<span style="border:{@width}px {@style} {@color}">{TEXT}</span>'
 		],
 		[
 			'[center]{TEXT}[/center]',
