@@ -2,7 +2,7 @@
 
 /**
 * @package   s9e\zetabbcodes
-* @copyright Copyright (c) 2018 The s9e Authors
+* @copyright Copyright (c) 2018 The s9e Authors <https://github.com/s9e>
 * @license   http://www.opensource.org/licenses/mit-license.php The MIT License
 */
 namespace s9e\zetabbcodes;
@@ -12,6 +12,16 @@ use s9e\TextFormatter\Configurator\Items\UnsafeTemplate;
 
 class listener implements EventSubscriberInterface
 {
+	protected $auth;
+	protected static $colPos = -1;
+	protected $user;
+
+	public function __construct(auth $auth, user $user)
+	{
+		$this->auth = $auth;
+		$this->user = $user;
+	}
+
 	public static function getSubscribedEvents()
 	{
 		return [
@@ -35,7 +45,12 @@ class listener implements EventSubscriberInterface
 
 	public function afterConfigure($event)
 	{
-		$configurator = $event['configurator'];
+		$tag->filterChain->append(__CLASS__ . '::processRow')
+			->resetParameters()
+			->addParameterByName('tag')
+			->addParameterByName('parser')
+			->addParameterByName('openTags');
+	}
 
 		$bbcodes = [
 			[
